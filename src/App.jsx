@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Upload, Image as ImageIcon, Sparkles, Copy, 
   RefreshCw, Check, AlertCircle, PenTool, Download, Stamp, X, Plus, SlidersHorizontal, Sun, Contrast, Droplet, Triangle,
-  Search, FileText, Instagram, BookOpen
+  Search, FileText, Instagram, BookOpen, Settings, Key
 } from 'lucide-react';
 
 // --- Configuration ---
-const API_KEY = 'AIzaSyDdwsNqwYWxaRe9dFJNHmARhvF3EZ-o2LE';
+// 修改點：不再寫死 API Key，改由介面輸入並存於 LocalStorage
 const MODEL_NAME = 'gemini-2.5-flash-preview-09-2025';
 
 // --- Global Styles ---
@@ -97,7 +97,11 @@ const REWRITE_PROMPT_BLOG = `
 `;
 
 const AIWriterApp = () => {
-  // 狀態管理
+  // 狀態管理：API Key
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [showKeyInput, setShowKeyInput] = useState(false);
+
+  // 狀態管理：圖片與生成
   const [images, setImages] = useState([]); 
   const [selectedImageId, setSelectedImageId] = useState(null); 
   const [temperature, setTemperature] = useState(0.7); 
@@ -117,6 +121,12 @@ const AIWriterApp = () => {
   const [livePreviewUrl, setLivePreviewUrl] = useState(null);
   
   const fileInputRef = useRef(null);
+
+  // 儲存 API Key
+  const handleSaveKey = (newKey) => {
+    setApiKey(newKey);
+    localStorage.setItem('gemini_api_key', newKey);
+  };
 
   // 處理圖片上傳
   const handleImageUpload = async (e) => {
@@ -334,6 +344,11 @@ const AIWriterApp = () => {
   };
 
   const callGemini = async (prompt, imageParts = []) => {
+    if (!apiKey) {
+      setShowKeyInput(true);
+      throw new Error("請先設定您的 Google API Key");
+    }
+
     const payload = {
       contents: [
         {
@@ -350,7 +365,7 @@ const AIWriterApp = () => {
       }
     };
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -384,7 +399,7 @@ const AIWriterApp = () => {
       }
     } catch (err) {
       console.error(err);
-      setError(`生成失敗: ${err.message}`);
+      setError(`${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -402,6 +417,8 @@ const AIWriterApp = () => {
       if (text) setMaterials(text);
     } catch (err) {
       console.error("Material analysis failed", err);
+      // 靜默失敗或提示
+      if (err.message.includes('API Key')) setError("請先設定 API Key");
     } finally {
       setAnalyzingMaterials(false);
     }
@@ -422,6 +439,7 @@ const AIWriterApp = () => {
       if (text) setRewriteResult(text);
     } catch (err) {
       console.error("Rewrite failed", err);
+      if (err.message.includes('API Key')) setError("請先設定 API Key");
     } finally {
       setRewriting(false);
     }
@@ -448,7 +466,7 @@ const AIWriterApp = () => {
       <GlobalStyles />
       
       {/* Header */}
-      <header className="bg-stone-900 text-stone-300 py-6 px-6 border-b border-stone-800 shadow-md">
+      <header className="bg-stone-900 text-stone-300 py-4 px-6 border-b border-stone-800 shadow-md">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#D2C4B5] text-stone-900 flex items-center justify-center rounded-sm font-serif font-bold text-xl">PH</div>
@@ -457,10 +475,44 @@ const AIWriterApp = () => {
               <p className="text-xs text-stone-500 tracking-widest uppercase">Pure House AI Writer</p>
             </div>
           </div>
-          <div className="hidden md:block text-xs text-stone-500">
-            Internal Tool v5.7 (Integrated Single File)
+          <div className="flex items-center gap-4">
+            <div className="hidden md:block text-xs text-stone-500 mr-2">
+              Internal Tool v5.8 (Secure Key)
+            </div>
+            <button 
+              onClick={() => setShowKeyInput(!showKeyInput)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${!apiKey ? 'bg-red-500/20 text-red-400 animate-pulse border border-red-500/50' : 'bg-stone-800 hover:bg-stone-700 text-stone-400'}`}
+            >
+              <Key size={14} />
+              {apiKey ? 'API Key 設定' : '設定 API Key (必要)'}
+            </button>
           </div>
         </div>
+        
+        {/* API Key Input Panel */}
+        {showKeyInput && (
+          <div className="max-w-7xl mx-auto mt-4 p-4 bg-stone-800 rounded border border-stone-700 animate-fade-in">
+            <label className="block text-xs font-bold text-stone-400 mb-2">Google Gemini API Key</label>
+            <div className="flex gap-2">
+              <input 
+                type="password" 
+                value={apiKey}
+                onChange={(e) => handleSaveKey(e.target.value)}
+                placeholder="Paste your key here (AIza...)"
+                className="flex-1 bg-stone-900 border border-stone-700 rounded px-3 py-2 text-stone-200 text-sm focus:outline-none focus:border-[#8B7355]"
+              />
+              <button 
+                onClick={() => setShowKeyInput(false)}
+                className="px-4 py-2 bg-[#8B7355] text-white rounded text-sm hover:bg-[#705C44]"
+              >
+                儲存並關閉
+              </button>
+            </div>
+            <p className="text-[10px] text-stone-500 mt-2">
+              金鑰僅儲存於您的瀏覽器 (Local Storage)，不會上傳至任何伺服器。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-[#8B7355] underline">Google AI Studio</a> 申請。
+            </p>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
